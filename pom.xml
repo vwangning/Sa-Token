@@ -15,7 +15,6 @@
 	<description>A Java Web lightweight authority authentication framework, comprehensive function, easy to use</description>
 	<url>https://github.com/dromara/sa-token</url>
 
-	
 	<!-- 所有模块 -->
 	<modules>
 		<module>sa-token-dependencies</module>
@@ -50,7 +49,7 @@
 		<connection>scm:git:https://github.com/dromara/sa-token.git</connection>
 		<developerConnection>scm:git:https://github.com/dromara/sa-token.git</developerConnection>
 	</scm>
-	
+
 	<!-- 作者信息 -->
 	<developers>
 		<developer>
@@ -58,8 +57,8 @@
 			<email>2393584716@qq.com</email>
 		</developer>
 	</developers>
-	
-	
+
+
 	<!-- 父仓库 -->
 	<parent>
 		<groupId>org.sonatype.oss</groupId>
@@ -86,7 +85,7 @@
 			
 		</dependencies>
 	</dependencyManagement>
-	
+
 	<!-- 项目构建 -->
 	<build>
 	   <plugins>
