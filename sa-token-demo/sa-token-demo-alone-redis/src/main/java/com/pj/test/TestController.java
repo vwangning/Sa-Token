@@ -17,8 +17,8 @@ import cn.dev33.satoken.stp.StpUtil;
 @RequestMapping("/test/")
 public class TestController {
 
-	@Autowired
-	StringRedisTemplate stringRedisTemplate;
+//	@Autowired
+//	StringRedisTemplate stringRedisTemplate;
 	
 	// 测试Sa-Token缓存， 浏览器访问： http://localhost:8081/test/login
 	@RequestMapping("login")
@@ -29,11 +29,11 @@ public class TestController {
 	}
 	
 	// 测试业务缓存   浏览器访问： http://localhost:8081/test/test
-	@RequestMapping("test")
-	public AjaxJson test() {
-		System.out.println("--------------- 测试业务缓存");
-		stringRedisTemplate.opsForValue().set("hello", "Hello World");
-		return AjaxJson.getSuccess();
-	}
+//	@RequestMapping("test")
+//	public AjaxJson test() {
+//		System.out.println("--------------- 测试业务缓存");
+//		stringRedisTemplate.opsForValue().set("hello", "Hello World");
+//		return AjaxJson.getSuccess();
+//	}
 	
 }

@@ -21,6 +21,7 @@
         <module>sa-token-redis</module>
         <module>sa-token-redis-jackson</module>
         <module>sa-token-redis-fastjson</module>
+        <module>sa-token-redis-ctg</module>
         <module>sa-token-redis-fastjson2</module>
         <module>sa-token-redisson-jackson</module>
         <module>sa-token-redisx</module>

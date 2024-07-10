@@ -16,7 +16,11 @@
 package cn.dev33.satoken.dao.alone;
 
 import cn.dev33.satoken.dao.*;
-import cn.dev33.satoken.exception.SaTokenException;
+import cn.dev33.satoken.dao.alone.redis.CtgCacheProperties;
+import cn.dev33.satoken.dao.alone.redis.CtgDataResourceEnv;
+import com.ctg.itrdc.cache.pool.CtgJedisPool;
+import com.ctg.itrdc.cache.pool.CtgJedisPoolConfig;
+import com.ctg.itrdc.cache.pool.CtgJedisPoolException;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
@@ -30,7 +34,9 @@ import org.springframework.data.redis.connection.*;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
+import redis.clients.jedis.HostAndPort;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -61,9 +67,15 @@ public class SaAloneRedisInject implements EnvironmentAware{
 	/**
 	 * Sa-Token 持久层接口 
 	 */
+
 	@Autowired(required = false)
-	public SaTokenDao saTokenDao;
-	
+	public SaTokenDao  saTokenDao;
+
+
+	private CtgJedisPool pool;
+	private CtgDataResourceEnv ctgDataResource;
+
+	private 	CtgJedisPoolConfig config;
 	/**
 	 * 开始注入 
 	 */
@@ -72,10 +84,6 @@ public class SaAloneRedisInject implements EnvironmentAware{
 		try {
 			// 如果 saTokenDao 为空或者为默认实现，则不进行任何操作
 			if(saTokenDao == null || saTokenDao instanceof SaTokenDaoDefaultImpl) {
-				return;
-			}
-			// 如果配置文件不包含相关配置，则不进行任何操作 
-			if(environment.getProperty(ALONE_PREFIX + ".host") == null) {
 				return;
 			}
 			
@@ -176,78 +184,128 @@ public class SaAloneRedisInject implements EnvironmentAware{
 				redisStaticMasterReplicaConfiguration.setPassword(RedisPassword.of(cfg.getPassword()));
 
 				redisAloneConfig = redisStaticMasterReplicaConfiguration;
+			}else if (pattern.equals("ctg-cache")){
+				System.out.println("开始初始化 : ctg-cache");
+				// 获取cfg对象，解析开发者配置的 sa-token.alone-redis 相关信息
+				CtgCacheProperties ctg_cfg = Binder.get(environment).bind("ctg.cache", CtgCacheProperties.class).get();
+				redisAloneConfig=ctg_cfg;
+				// 如果是电信的ctg 走jedis连接池
+
+				String url = ctg_cfg.getUrl();
+				// 创建ctgDataResourceEnv对象
+				List<HostAndPort> hostAndPorts = new ArrayList<>();
+
+				// 按逗号分隔字符串
+				String[] hosts = url.split(",");
+				for (String host : hosts) {
+
+					// 按冒号分隔主机名和端口
+					String[] parts = host.split(":");
+					if (parts.length == 2) {
+						String hostname = parts[0];
+						int port = Integer.parseInt(parts[1]);
+						HostAndPort hostAndPort = new HostAndPort(hostname, port);
+						hostAndPorts.add(hostAndPort);
+					}
+				}
+				// 初始化 poolConfig
+				GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
+
+				poolConfig.setMaxIdle(ctg_cfg.getPool().getConfig().getMaxIdle());
+				poolConfig.setMaxTotal(ctg_cfg.getPool().getConfig().getMaxTotal());
+				poolConfig.setMinIdle(ctg_cfg.getPool().getConfig().getMinIdle());
+
+				 config = new CtgJedisPoolConfig(hostAndPorts);
+
+				config.setDatabase(ctg_cfg.getPool().getConfig().getDatabase())
+						.setPassword(ctg_cfg.getUsername() + "#" + ctg_cfg.getPassword())
+						.setPoolConfig(poolConfig)
+						.setPeriod(ctg_cfg.getPool().getConfig().getPeriod())
+						.setMonitorTimeout(ctg_cfg.getPool().getConfig().getMonitorTimeout())
+						.setMonitorLog(false);
 			} else {
-				// 模式无法识别
-				throw new SaTokenException("SaToken 无法识别 Alone-Redis 配置的模式: " + pattern);
+				return;
 			}
 
-			// 2. 连接池配置 
-			GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
-			// pool配置 
-			Lettuce lettuce = cfg.getLettuce();
-			if(lettuce.getPool() != null) {
-				RedisProperties.Pool pool = cfg.getLettuce().getPool();
-				// 连接池最大连接数
-				poolConfig.setMaxTotal(pool.getMaxActive());	
-				// 连接池中的最大空闲连接 
-				poolConfig.setMaxIdle(pool.getMaxIdle());   	
-				// 连接池中的最小空闲连接
-				poolConfig.setMinIdle(pool.getMinIdle());		
-				// 连接池最大阻塞等待时间（使用负值表示没有限制）
-				poolConfig.setMaxWaitMillis(pool.getMaxWait().toMillis());
+			if (pattern.equals("ctg-cache")){
+				try {
+					pool = new CtgJedisPool(config);
+					// 初始化链接池
+					SaTokenDaoRedisCTG dao = (SaTokenDaoRedisCTG) saTokenDao;
+					dao.isInit = false;
+					dao.init(pool);
+				} catch (CtgJedisPoolException e) {
+					e.printStackTrace();
+				}
+				return;
 			}
-			LettucePoolingClientConfiguration.LettucePoolingClientConfigurationBuilder builder = LettucePoolingClientConfiguration.builder();
-			// timeout 
-			if(cfg.getTimeout() != null) {
-				builder.commandTimeout(cfg.getTimeout());
-			}
-			// shutdownTimeout 
-			if(lettuce.getShutdownTimeout() != null) {
-				builder.shutdownTimeout(lettuce.getShutdownTimeout());
-			}
-			// 创建Factory对象
-			LettuceClientConfiguration clientConfig = builder.poolConfig(poolConfig).build();
-			LettuceConnectionFactory factory = new LettuceConnectionFactory(redisAloneConfig, clientConfig);
-			factory.afterPropertiesSet();
-			
-			// 3. 开始初始化 SaTokenDao ，此处需要依次判断开发者引入的是哪个 redis 库
+				// 2. 连接池配置
+				GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
+				// pool配置
+				Lettuce lettuce = cfg.getLettuce();
+				if (lettuce.getPool() != null) {
+					RedisProperties.Pool pool = cfg.getLettuce().getPool();
+					// 连接池最大连接数
+					poolConfig.setMaxTotal(pool.getMaxActive());
+					// 连接池中的最大空闲连接
+					poolConfig.setMaxIdle(pool.getMaxIdle());
+					// 连接池中的最小空闲连接
+					poolConfig.setMinIdle(pool.getMinIdle());
+					// 连接池最大阻塞等待时间（使用负值表示没有限制）
+					poolConfig.setMaxWaitMillis(pool.getMaxWait().toMillis());
+				}
+				LettucePoolingClientConfiguration.LettucePoolingClientConfigurationBuilder builder = LettucePoolingClientConfiguration.builder();
+				// timeout
+				if (cfg.getTimeout() != null) {
+					builder.commandTimeout(cfg.getTimeout());
+				}
+				// shutdownTimeout
+				if (lettuce.getShutdownTimeout() != null) {
+					builder.shutdownTimeout(lettuce.getShutdownTimeout());
+				}
+				// 创建Factory对象
+				LettuceClientConfiguration clientConfig = builder.poolConfig(poolConfig).build();
+				LettuceConnectionFactory factory = new LettuceConnectionFactory(redisAloneConfig, clientConfig);
+				factory.afterPropertiesSet();
+				// 3. 开始初始化 SaTokenDao ，此处需要依次判断开发者引入的是哪个 redis 库
 
-			// 如果开发者引入的是：sa-token-redis
-			try {
-				Class.forName("cn.dev33.satoken.dao.SaTokenDaoRedis");
-				SaTokenDaoRedis dao = (SaTokenDaoRedis)saTokenDao;
-				dao.isInit = false;
-				dao.init(factory);
-				return;
-			} catch (ClassNotFoundException ignored) {
-			}
-			// 如果开发者引入的是：sa-token-redis-jackson
-			try {
-				Class.forName("cn.dev33.satoken.dao.SaTokenDaoRedisJackson");
-				SaTokenDaoRedisJackson dao = (SaTokenDaoRedisJackson)saTokenDao;
-				dao.isInit = false;
-				dao.init(factory);
-				return;
-			} catch (ClassNotFoundException ignored) {
-			}
-			// 如果开发者引入的是：sa-token-redis-fastjson
-			try {
-				Class.forName("cn.dev33.satoken.dao.SaTokenDaoRedisFastjson");
-				SaTokenDaoRedisFastjson dao = (SaTokenDaoRedisFastjson)saTokenDao;
-				dao.isInit = false;
-				dao.init(factory);
-				return;
-			} catch (ClassNotFoundException ignored) {
-			}
-			// 如果开发者引入的是：sa-token-redis-fastjson2
-			try {
-				Class.forName("cn.dev33.satoken.dao.SaTokenDaoRedisFastjson2");
-				SaTokenDaoRedisFastjson2 dao = (SaTokenDaoRedisFastjson2)saTokenDao;
-				dao.isInit = false;
-				dao.init(factory);
-				return;
-			} catch (ClassNotFoundException ignored) {
-			}
+				// 如果开发者引入的是：sa-token-redis
+				try {
+					Class.forName("cn.dev33.satoken.dao.SaTokenDaoRedis");
+					SaTokenDaoRedis dao = (SaTokenDaoRedis) saTokenDao;
+					dao.isInit = false;
+					dao.init(factory);
+					return;
+				} catch (ClassNotFoundException ignored) {
+				}
+				// 如果开发者引入的是：sa-token-redis-jackson
+				try {
+					Class.forName("cn.dev33.satoken.dao.SaTokenDaoRedisJackson");
+					SaTokenDaoRedisJackson dao = (SaTokenDaoRedisJackson) saTokenDao;
+					dao.isInit = false;
+					dao.init(factory);
+
+					return;
+				} catch (ClassNotFoundException ignored) {
+				}
+				// 如果开发者引入的是：sa-token-redis-fastjson
+				try {
+					Class.forName("cn.dev33.satoken.dao.SaTokenDaoRedisFastjson");
+					SaTokenDaoRedisFastjson dao = (SaTokenDaoRedisFastjson) saTokenDao;
+					dao.isInit = false;
+					dao.init(factory);
+					return;
+				} catch (ClassNotFoundException ignored) {
+				}
+				// 如果开发者引入的是：sa-token-redis-fastjson2
+				try {
+					Class.forName("cn.dev33.satoken.dao.SaTokenDaoRedisFastjson2");
+					SaTokenDaoRedisFastjson2 dao = (SaTokenDaoRedisFastjson2) saTokenDao;
+					dao.isInit = false;
+					dao.init(factory);
+					return;
+				} catch (ClassNotFoundException ignored) {
+				}
 
 			// 至此，说明开发者一个 redis 插件也没引入，或者引入的 redis 插件不在 sa-token-alone-redis 的支持范围内
 

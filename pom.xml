@@ -21,7 +21,7 @@
 		<module>sa-token-dependencies</module>
 		<module>sa-token-bom</module>
 		<module>sa-token-core</module>
-		<module>sa-token-starter</module>
+<!--		<module>sa-token-starter</module>-->
 		<module>sa-token-plugin</module>
 	</modules>
 

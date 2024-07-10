@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=cn.dev33.satoken.dao.SaTokenDaoRedisCTG,cn.dev33.satoken.dao.tcg.CtgRedisService,\
+  cn.dev33.satoken.dao.tcg.CtgConfiguration
