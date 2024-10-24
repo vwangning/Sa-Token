@@ -22,9 +22,14 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import cn.dev33.satoken.dao.tcg.CtgRedisService;
+import cn.dev33.satoken.session.SaSession;
+import cn.dev33.satoken.strategy.SaStrategy;
 import cn.dev33.satoken.util.SaFoxUtil;
+import com.alibaba.fastjson.JSON;
 import com.ctg.itrdc.cache.pool.CtgJedisPool;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.stereotype.Component;
 
 
@@ -46,20 +51,33 @@ public class SaTokenDaoRedisCTG implements SaTokenDao {
 	public static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern(TIME_PATTERN);
 	public boolean isInit;
 
+
+	/**
+	 * String 读写专用
+	 */
 	@Autowired
-	CtgRedisService ctgRedisService;
+	public CtgRedisService stringRedisTemplate;
 
+	/**
+	 * Object 读写专用
+	 */
 
+	@Autowired
+	public CtgRedisService objectRedisTemplate;
 	public void init(CtgJedisPool ctgJedisPool) {
 		if(isInit == true) {
 			return;
 		}
+		// 重写 SaSession 生成策略
+		SaStrategy.instance.createSession = (sessionId) -> new SaSessionForCtgjsonCustomized(sessionId);
+
+
 		isInit = true;
 	}
 
 	@Override
 	public String get(String key) {
-		return ctgRedisService.getCacheObject(key);
+		return stringRedisTemplate.getCacheObject(key);
 	}
 
 	@Override
@@ -68,9 +86,9 @@ public class SaTokenDaoRedisCTG implements SaTokenDao {
 			return;
 		}
 		if(timeout == SaTokenDao.NEVER_EXPIRE) {
-			ctgRedisService.setCacheObject(key, value);
+			stringRedisTemplate.setCacheObject(key, value);
 		}else {
-			ctgRedisService.setCacheObject(key, value, timeout, TimeUnit.SECONDS);
+			stringRedisTemplate.setCacheObject(key, value, timeout, TimeUnit.SECONDS);
 		}
 
 	}
@@ -91,7 +109,7 @@ public class SaTokenDaoRedisCTG implements SaTokenDao {
 	 */
 	@Override
 	public void delete(String key) {
-		ctgRedisService.deleteObject(key);
+		stringRedisTemplate.deleteObject(key);
 	}
 
 
@@ -100,7 +118,7 @@ public class SaTokenDaoRedisCTG implements SaTokenDao {
 	 */
 	@Override
 	public long getTimeout(String key) {
-		return ctgRedisService.getExpire(key);
+		return stringRedisTemplate.getExpire(key);
 	}
 
 	@Override
@@ -116,7 +134,7 @@ public class SaTokenDaoRedisCTG implements SaTokenDao {
 			}
 			return;
 		}
-		ctgRedisService.expire(key, timeout, TimeUnit.SECONDS);
+		stringRedisTemplate.expire(key, timeout, TimeUnit.SECONDS);
 	}
 
 
@@ -125,7 +143,9 @@ public class SaTokenDaoRedisCTG implements SaTokenDao {
 	 */
 	@Override
 	public Object getObject(String key) {
-		return ctgRedisService.type(key);
+		System.out.println("getObject: " + key);
+		Object cacheObject = objectRedisTemplate.getCacheObject(key);
+		return cacheObject;
 	}
 
 	@Override
@@ -134,9 +154,11 @@ public class SaTokenDaoRedisCTG implements SaTokenDao {
 			return;
 		}
 		if(timeout == SaTokenDao.NEVER_EXPIRE) {
-			ctgRedisService.setCacheObject(key, object);
+			System.out.println("setKey: " + key);
+			System.out.println("setObject: " + object);
+			objectRedisTemplate.setCacheObject(key, object);
 		}else {
-			ctgRedisService.setCacheObject(key, object, timeout, TimeUnit.SECONDS);
+			objectRedisTemplate.setCacheObject(key, object, timeout, TimeUnit.SECONDS);
 		}
 	}
 
@@ -152,12 +174,12 @@ public class SaTokenDaoRedisCTG implements SaTokenDao {
 
 	@Override
 	public void deleteObject(String key) {
-		ctgRedisService.deleteObject(key);
+		objectRedisTemplate.deleteObject(key);
 	}
 
 	@Override
 	public long getObjectTimeout(String key) {
-		 return ctgRedisService.getCacheObject(key);
+		 return objectRedisTemplate.getExpire(key);
 	}
 
 	@Override
@@ -173,13 +195,22 @@ public class SaTokenDaoRedisCTG implements SaTokenDao {
 			}
 			return;
 		}
-		ctgRedisService.expire(key, timeout, TimeUnit.SECONDS);
+		objectRedisTemplate.expire(key, timeout, TimeUnit.SECONDS);
 	}
 
 	@Override
 	public List<String> searchData(String prefix, String keyword, int start, int size, boolean sortType) {
-		Set<String> keys = ctgRedisService.keys(prefix + "*" + keyword + "*");
+		Set<String> keys = objectRedisTemplate.keys(prefix + "*" + keyword + "*");
 		List<String> list = new ArrayList<>(keys);
 		return SaFoxUtil.searchList(list, start, size, sortType);
+	}
+
+	@Override
+	public SaSession getSession(String sessionId) {
+		Object obj = getObject(sessionId);
+		if (obj == null) {
+			return null;
+		}
+		return JSON.parseObject(obj.toString(), SaSessionForCtgjsonCustomized.class);
 	}
 }

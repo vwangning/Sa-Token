@@ -1,4 +1,8 @@
 package cn.dev33.satoken.dao.tcg;
+import com.alibaba.fastjson.JSON;
+
+import com.alibaba.fastjson.parser.ParserConfig;
+import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.ctg.itrdc.cache.pool.CtgJedisPoolException;
 import com.ctg.itrdc.cache.pool.ProxyJedis;
 import org.apache.commons.lang3.BooleanUtils;
@@ -13,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 
 @Component
 @DependsOn("ctgClient")
-public class CtgRedisService {
+public class CtgRedisService  {
 
     @Resource(name = "ctgClient")
     CtgClient ctgClient;
@@ -119,8 +123,9 @@ public class CtgRedisService {
         ProxyJedis jedis = null;
         try {
             jedis = getJedis();  //获取连接，可能抛出异常
-            jedis.set(s, (String) t, SetParams.setParams().ex(i));
-//            jedis.set(s, JsonUtil.toJson(t), SetParams.setParams().ex(i));
+            String json = JSON.toJSONString(t, SerializerFeature.WriteClassName); // true表示序列化时包含类名
+            System.out.println("redis 存入的 K="+s+" ******* value="+json);
+            jedis.set(s, json, SetParams.setParams().ex(i));
         } catch (CtgJedisPoolException e) {
             e.printStackTrace();
             throw new RuntimeException("缓存系统异常，请联系管理员");
@@ -133,10 +138,13 @@ public class CtgRedisService {
     }
 
     public void setCacheObject(String s, Object t) {
+        ParserConfig.getGlobalInstance().setAutoTypeSupport(true);
         ProxyJedis jedis = null;
         try {
             jedis = getJedis();  //获取连接，可能抛出异常
-            jedis.set(s, String.valueOf(t));
+            String json = JSON.toJSONString(t, SerializerFeature.WriteClassName); // 使用fastjson序列化对象为
+            System.out.println("redis 存入的 K="+s+" ******* value="+json);
+            jedis.set(s, json);
         } catch (CtgJedisPoolException e) {
             e.printStackTrace();
         } finally {
@@ -155,10 +163,12 @@ public class CtgRedisService {
      * @param timeOut
      */
     public void setCacheObject(String s, Object t, Long timeOut, TimeUnit timeUnit) {
+        ParserConfig.getGlobalInstance().setAutoTypeSupport(true);
         ProxyJedis jedis = null;
         try {
             jedis = getJedis();  //获取连接，可能抛出异常
-            jedis.set(s, String.valueOf(t));
+            String json = JSON.toJSONString(t,SerializerFeature.WriteClassName); // 使用fastjson序列化对象
+            jedis.set(s, json);
             jedis.expire(s, (int) TimeUnit.SECONDS.convert(timeOut, timeUnit));
         } catch (CtgJedisPoolException e) {
             e.printStackTrace();
@@ -286,14 +296,18 @@ public class CtgRedisService {
     }
 
     public <T> T getCacheObject(String s) {
+        ParserConfig.getGlobalInstance().setAutoTypeSupport(true);
         ProxyJedis jedis = null;
         try {
             jedis = getJedis();  //获取连接，可能抛出异常
-            String result = jedis.get(s);
-            if (StringUtils.isEmpty(result)) {
+            String json = jedis.get(s);
+            if (StringUtils.isEmpty(json)) {
                 return null;
             }
-            return (T) result;
+            System.out.println("redis 取出的 K="+s+" ******* value="+json);
+            // 使用TypeReference来指定返回类型
+            System.out.println("wangn");
+            return (T) JSON.parseObject(json, Object.class);
         } catch (CtgJedisPoolException e) {
             e.printStackTrace();
             throw new RuntimeException("缓存系统异常，请联系管理员");
