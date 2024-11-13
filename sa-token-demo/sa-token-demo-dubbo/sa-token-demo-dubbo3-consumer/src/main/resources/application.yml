@@ -8,17 +8,17 @@ spring:
         # Redis数据库索引（默认为0）
         database: 0
         # Redis服务器地址
-        host: 127.0.0.1
+        host: 47.93.221.63
         # Redis服务器连接端口
         port: 6379
         # Redis服务器连接密码（默认为空）
-        password: 
+        password: gGPNdtd32LY03CFi
         # 连接超时时间
         
 dubbo: 
     application: 
         # 服务名称 
-        name: dubbo-consumer-demo
+        name: dubbo-consumer-wangn
     registry: 
         # 注册中心地址 
-        address: nacos://127.0.0.1:8001
+        address: nacos://47.93.221.63:8848

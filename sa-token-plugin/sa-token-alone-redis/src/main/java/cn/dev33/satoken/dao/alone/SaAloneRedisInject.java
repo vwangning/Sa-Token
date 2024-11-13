@@ -73,7 +73,6 @@ public class SaAloneRedisInject implements EnvironmentAware{
 
 
 	private CtgJedisPool pool;
-	private CtgDataResourceEnv ctgDataResource;
 
 	private 	CtgJedisPoolConfig config;
 	/**
@@ -90,13 +89,15 @@ public class SaAloneRedisInject implements EnvironmentAware{
 			// ------------------- 开始注入 
 			
 			// 获取cfg对象，解析开发者配置的 sa-token.alone-redis 相关信息
-			RedisProperties cfg = Binder.get(environment).bind(ALONE_PREFIX, RedisProperties.class).get();
+//
 
 			// 1. Redis配置
 			RedisConfiguration redisAloneConfig;
 			String pattern = environment.getProperty(ALONE_PREFIX + ".pattern", "single");
+
 			if (pattern.equals("single")) {
 				// 单体模式
+				RedisProperties cfg = Binder.get(environment).bind(ALONE_PREFIX, RedisProperties.class).get();
 				RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration();
 				redisConfig.setHostName(cfg.getHost());
 				redisConfig.setPort(cfg.getPort());
@@ -113,6 +114,7 @@ public class SaAloneRedisInject implements EnvironmentAware{
 
 			} else if (pattern.equals("cluster")){
 				// 普通集群模式
+				RedisProperties cfg = Binder.get(environment).bind(ALONE_PREFIX, RedisProperties.class).get();
 				RedisClusterConfiguration redisClusterConfig = new RedisClusterConfiguration();
 				// 低版本没有 username 属性，捕获异常给个提示即可，无需退出程序
 				try {
@@ -133,6 +135,7 @@ public class SaAloneRedisInject implements EnvironmentAware{
 				redisAloneConfig = redisClusterConfig;
 			} else if (pattern.equals("sentinel")) {
 				// 哨兵集群模式
+				RedisProperties cfg = Binder.get(environment).bind(ALONE_PREFIX, RedisProperties.class).get();
 				RedisSentinelConfiguration redisSentinelConfiguration = new RedisSentinelConfiguration();
 				redisSentinelConfiguration.setDatabase(cfg.getDatabase());
 				// 低版本没有 username 属性，捕获异常给个提示即可，无需退出程序
@@ -155,6 +158,7 @@ public class SaAloneRedisInject implements EnvironmentAware{
 				redisAloneConfig = redisSentinelConfiguration;
 			} else if (pattern.equals("socket")) {
 				// socket 连接单体 Redis
+				RedisProperties cfg = Binder.get(environment).bind(ALONE_PREFIX, RedisProperties.class).get();
 				RedisSocketConfiguration redisSocketConfiguration = new RedisSocketConfiguration();
 				redisSocketConfiguration.setDatabase(cfg.getDatabase());
 				// 低版本没有 username 属性，捕获异常给个提示即可，无需退出程序
@@ -171,6 +175,7 @@ public class SaAloneRedisInject implements EnvironmentAware{
 			} else if (pattern.equals("aws")) {
 				// AWS ElastiCache
 				// AWS Redis 远程主机地址: String hoseName = "****.***.****.****.cache.amazonaws.com";
+				RedisProperties cfg = Binder.get(environment).bind(ALONE_PREFIX, RedisProperties.class).get();
 				String hostName = cfg.getHost();
 				int port = cfg.getPort();
 				RedisStaticMasterReplicaConfiguration redisStaticMasterReplicaConfiguration = new RedisStaticMasterReplicaConfiguration(hostName, port);
@@ -242,6 +247,7 @@ public class SaAloneRedisInject implements EnvironmentAware{
 				// 2. 连接池配置
 				GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
 				// pool配置
+				RedisProperties cfg = Binder.get(environment).bind(ALONE_PREFIX, RedisProperties.class).get();
 				Lettuce lettuce = cfg.getLettuce();
 				if (lettuce.getPool() != null) {
 					RedisProperties.Pool pool = cfg.getLettuce().getPool();
