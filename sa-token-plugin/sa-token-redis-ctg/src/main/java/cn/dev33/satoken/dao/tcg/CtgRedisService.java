@@ -304,9 +304,7 @@ public class CtgRedisService  {
             if (StringUtils.isEmpty(json)) {
                 return null;
             }
-            System.out.println("redis 取出的 K="+s+" ******* value="+json);
             // 使用TypeReference来指定返回类型
-            System.out.println("wangn");
             return (T) JSON.parseObject(json, Object.class);
         } catch (CtgJedisPoolException e) {
             e.printStackTrace();

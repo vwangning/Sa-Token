@@ -160,7 +160,6 @@ public class CtgConfiguration {
                 } catch (NumberFormatException e) {
                 }
             }
-            System.out.println("ctgDataResource.getMonitorTimeout()======" + ctgDataResource.getMonitorTimeout());
             if (StringUtils.isNotEmpty(monitorTimeout)) {
                 try {
                     ctgDataResource.setMonitorTimeout(Integer.parseInt(monitorTimeout));
